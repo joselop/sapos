@@ -76,7 +76,7 @@
       </div>
       <div class="levels">
         <button id="start" class="level">NIVEL 1<span>Hombre Haba: salva los sapos</span></button>
-        <button id="start2" class="level">NIVEL 2<span>Consigue 9 patatas y baja el efecto</span></button>
+        <button id="start2" class="level">NIVEL 2<span>Consigue 9 patatas y defiende la bolsa</span></button>
       </div>
       <small>Móvil: joystick + botón · Teclado: WASD/flechas + espacio · Partida de 1–2 minutos</small>
     </div>
@@ -103,7 +103,7 @@
     const TAU=Math.PI*2, WORLD={w:1400,h:900}, target=12;
     let W=0,H=0,dpr=1,scale=1,cam={x:0,y:0},playing=false,paused=false,last=0,time=0,mass=0,saved=0,shake=0,pulseCD=0,spawnT=0,mode=1;
     let hero,frogs=[],debris=[],particles=[],stars=[],keys={},joy={x:0,y:0,id:null};
-    let ana,patatas=[],mushrooms=[],eaten=0,effect=100,timeLeft=75,pleaText='',pleaLife=0;
+    let ana,patatas=[],mushrooms=[],thieves=[],eaten=0,effect=100,timeLeft=75,pleaText='',pleaLife=0,stock=15,thiefSpawn=0,failReason='';
     const portal={x:180,y:450,r:72};
     const rnd=(a,b)=>a+Math.random()*(b-a), clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
     const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -121,16 +121,22 @@
     }
     function reset2(){
       hero={x:180,y:450,vx:0,vy:0,r:24,carry:0,angle:0,inv:0,hop:0};
-      ana={x:1080,y:450,r:62,blink:0};frogs=[];debris=[];particles=[];patatas=[];mushrooms=[];eaten=0;effect=100;timeLeft=75;time=0;shake=0;pulseCD=0;pleaText='';pleaLife=0;
-      for(let i=0;i<14;i++)mushrooms.push({x:rnd(300,WORLD.w-80),y:rnd(80,WORLD.h-80),r:rnd(18,27),phase:rnd(0,TAU)});
+      ana={x:1080,y:450,r:62,blink:0};frogs=[];debris=[];particles=[];patatas=[];mushrooms=[];thieves=[];eaten=0;effect=100;timeLeft=75;time=0;shake=0;pulseCD=0;pleaText='';pleaLife=0;stock=15;thiefSpawn=3;failReason='';
+      for(let i=0;i<14;i++){let m;do{m={x:rnd(300,WORLD.w-80),y:rnd(80,WORLD.h-80),r:rnd(18,27),phase:rnd(0,TAU)}}while(dist(m,ana)<145||dist(m,hero)<130);mushrooms.push(m)}
+      for(let i=0;i<3;i++)spawnThief(i*180);
       stars=Array.from({length:65},()=>({x:rnd(0,WORLD.w),y:rnd(0,WORLD.h),r:rnd(1,4),a:rnd(.2,.8)}));updateHUD();
     }
     function spawnFrog(){
       let f;do{f={x:rnd(360,WORLD.w-80),y:rnd(70,WORLD.h-70),vx:rnd(-20,20),vy:rnd(-20,20),r:18,hop:rnd(0,TAU)}}while(dist(f,hero||portal)<170);frogs.push(f);
     }
+    function spawnThief(offset=0){
+      const side=Math.floor(rnd(0,3));let x,y;
+      if(side===0){x=40;y=rnd(80,WORLD.h-80)}else if(side===1){x=rnd(250,WORLD.w-180);y=45}else{x=rnd(250,WORLD.w-180);y=WORLD.h-45}
+      thieves.push({x:x-offset,y,vx:0,vy:0,r:22,hop:rnd(0,TAU),carrying:false,flee:false,stun:0,shade:Math.floor(rnd(0,3))});
+    }
     function start(which=1){
       mode=which;mode===1?reset():reset2();intro.style.display='none';result.style.display='none';hud.hidden=false;playing=true;paused=false;last=performance.now();requestAnimationFrame(loop);blip(mode===1?180:240,.08,'square',.05);
-      if(mode===2)setTimeout(()=>{if(playing&&mode===2)say('ACÉRCATE A ANA Y PULSA «DAR PENA»')},250);
+      if(mode===2){setTimeout(()=>{if(playing&&mode===2)say('PIDE PATATAS Y PROTEGE LA BOLSA')},250);setTimeout(()=>{if(playing&&mode===2)say('¡EMBISTE A LOS SAPOS LADRONES!')},1750)}
     }
     function finish(win){
       playing=false;hud.hidden=true;result.style.display='grid';
@@ -139,9 +145,9 @@
         document.querySelector('#resultTitle').innerHTML=win?'Los sapos <span>sobreviven</span>':'La Tierra hizo <span>CHOF</span>';
         document.querySelector('#resultText').textContent=win?`Salvaste ${saved} sapos. El Hombre Haba estabilizó a Mamá de Ana con energía leguminosa y evitó el desastre cósmico.`:`Salvaste ${saved} sapos antes de que Mamá de Ana alcanzara la masa crítica. Hasta los héroes leguminosos necesitan otra oportunidad.`;
       }else{
-        document.querySelector('#resultKicker').textContent=win?'¡PATATAS TERAPÉUTICAS!':'¡DEMASIADO TARDE!';
-        document.querySelector('#resultTitle').innerHTML=win?'Vuelves a ver <span>normal</span>':'Las setas dijeron <span>CUCÚ</span>';
-        document.querySelector('#resultText').textContent=win?`Comiste ${eaten} patatas y se te pasó el efecto. Ana todavía conserva media bolsa, pero ha aprendido a compartir una patatica.`:`Comiste ${eaten} patatas, pero el reloj llegó a cero. Ana sigue abrazada a la bolsa como si fuera un tesoro nacional.`;
+        document.querySelector('#resultKicker').textContent=win?'¡PATATAS TERAPÉUTICAS!':failReason==='bag'?'¡BOLSA SAQUEADA!':'¡DEMASIADO TARDE!';
+        document.querySelector('#resultTitle').innerHTML=win?'Vuelves a ver <span>normal</span>':failReason==='bag'?'No queda ni <span>una patatica</span>':'Las setas dijeron <span>CUCÚ</span>';
+        document.querySelector('#resultText').textContent=win?`Comiste ${eaten} patatas y se te pasó el efecto. Además protegiste las existencias de Ana de la horda de sapos gorrones.`:failReason==='bag'?`Los sapos rivales vaciaron la bolsa cuando solo habías comido ${eaten}. Embístelos o espántalos con «Dar pena» antes de que escapen.`:`Comiste ${eaten} patatas, pero el reloj llegó a cero. Había que pedir, comer y defender la bolsa al mismo tiempo.`;
       }
     }
     document.querySelector('#start').onclick=()=>start(1);document.querySelector('#start2').onclick=()=>start(2);document.querySelector('#again').onclick=()=>start(mode);
@@ -168,10 +174,13 @@
         pulseCD=3.2;
         const frases=['Tengo hambre y tengo muchos hermanos…','Nunca he conocido una patatica…','Mi barriga acaba de hacer CROAC…','Compartir es de sapas legendarias…'];
         pleaText=frases[Math.floor(rnd(0,frases.length))];pleaLife=2.2;say(pleaText);burst(hero.x,hero.y,'#bde8ff',18,150);blip(310,.25,'triangle',.055);
+        thieves.forEach(t=>{const dx=t.x-hero.x,dy=t.y-hero.y,m=Math.hypot(dx,dy)||1;if(m<245){t.vx+=dx/m*380;t.vy+=dy/m*380;t.stun=Math.max(t.stun,.8)}});
         if(dist(hero,ana)<310){
-          const a=Math.atan2(hero.y-ana.y,hero.x-ana.x),s=250;
-          patatas.push({x:ana.x-30,y:ana.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:19,rot:0,life:12});
-          setTimeout(()=>{if(playing&&mode===2)say('ANA: «Bueno… ¡UNA!»')},450);
+          if(stock>0){
+            const a=Math.atan2(hero.y-ana.y,hero.x-ana.x),s=250;stock--;
+            patatas.push({x:ana.x-30,y:ana.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:19,rot:0,life:12});
+            setTimeout(()=>{if(playing&&mode===2)say('ANA: «Bueno… ¡UNA!»')},450);
+          }else setTimeout(()=>{if(playing&&mode===2)say('ANA: «¡LA BOLSA ESTÁ VACÍA!»')},400);
         }else setTimeout(()=>{if(playing&&mode===2)say('¡Ana no te oye desde tan lejos!')},500);
         return;
       }
@@ -184,7 +193,7 @@
         objectiveText.innerHTML=`🐸 A SALVO: <b>${saved}</b>/12 · MOCHILA: <b>${hero?hero.carry:0}</b>/3`;
         meterLabel.textContent='MAMÁ DE ANA: MASA CRÍTICA';massFill.style.width=clamp(mass,0,100)+'%';massFill.style.background='linear-gradient(90deg,#ffd34e,#ff603e)';
       }else{
-        objectiveText.innerHTML=`🥔 COMIDAS: <b>${eaten}</b>/9 · ⏱️ <b>${Math.ceil(timeLeft)}</b> s`;
+        objectiveText.innerHTML=`🥔 COMIDAS: <b>${eaten}</b>/9 · BOLSA: <b>${stock}</b> · ⏱️ <b>${Math.ceil(timeLeft)}</b> s`;
         meterLabel.textContent='EFECTO DE LAS SETAS';massFill.style.width=clamp(effect,0,100)+'%';massFill.style.background='linear-gradient(90deg,#78e8ff,#b45cff,#ff5e9a)';
       }
       pulseBtn.style.filter=pulseCD>0?'grayscale(.8) brightness(.65)':'none';pulseBtn.textContent=pulseCD>0?`${pulseCD.toFixed(1)} s`:(mode===1?'PULSO\nDE HABA':'DAR\nPENA');
@@ -215,6 +224,23 @@
       hero.vx+=Math.sin(time*2.7)*effect*.16*dt;hero.vy+=Math.cos(time*2.1)*effect*.16*dt;
       hero.x=clamp(hero.x+hero.vx*dt,35,WORLD.w-35);hero.y=clamp(hero.y+hero.vy*dt,35,WORLD.h-35);hero.hop+=dt*6;
       ana.y=450+Math.sin(time*.9)*65;ana.blink+=dt;
+      thiefSpawn-=dt;if(thiefSpawn<=0&&thieves.length<8){spawnThief();thiefSpawn=Math.max(2.7,5.2-time*.035)}
+      for(let i=thieves.length-1;i>=0;i--){
+        const t=thieves[i];t.hop+=dt*(t.carrying?8:6);t.stun=Math.max(0,t.stun-dt);t.hit=Math.max(0,(t.hit||0)-dt);
+        const goal=t.carrying||t.flee?{x:t.exitX,y:t.exitY}:ana,dx=goal.x-t.x,dy=goal.y-t.y,dm=Math.hypot(dx,dy)||1,speed=t.carrying?175:t.flee?150:82+time*.28;
+        if(t.stun<=0){t.vx+=(dx/dm*speed-t.vx)*dt*2.5;t.vy+=(dy/dm*speed-t.vy)*dt*2.5}else{t.vx*=Math.pow(.12,dt);t.vy*=Math.pow(.12,dt)}
+        t.x+=t.vx*dt;t.y+=t.vy*dt;
+        if(!t.carrying&&!t.flee&&dist(t,ana)<ana.r+t.r*.7){
+          if(stock>0){stock--;t.carrying=true;t.exitX=t.x<ana.x?-70:WORLD.w+70;t.exitY=clamp(t.y+rnd(-260,260),40,WORLD.h-40);say('¡UN SAPO ROBA UNA PATATA!');blip(155,.14,'square',.05)}
+          else{t.flee=true;t.exitX=-70;t.exitY=t.y}
+        }
+        if(t.hit<=0&&dist(hero,t)<hero.r+t.r+5){
+          t.hit=.7;const bx=t.x-hero.x,by=t.y-hero.y,bm=Math.hypot(bx,by)||1;t.vx+=bx/bm*330;t.vy+=by/bm*330;t.stun=1;
+          if(t.carrying){stock++;t.carrying=false;t.flee=true;t.exitX=t.x<ana.x?-70:WORLD.w+70;t.exitY=t.y;burst(t.x,t.y,'#ffd86a',16,180);say('¡PATATA RECUPERADA!');blip(540,.13,'square',.06)}
+          else{burst(t.x,t.y,'#bde8ff',8,120);say('¡FUERA DE LA BOLSA!')}
+        }
+        if((t.carrying||t.flee)&&(t.x<-60||t.x>WORLD.w+60||t.y<-60||t.y>WORLD.h+60))thieves.splice(i,1);
+      }
       for(const m of mushrooms){
         m.phase+=dt*2;
         if(hero.inv<=0&&dist(hero,m)<hero.r+m.r*.7){hero.inv=1.2;effect=Math.min(100,effect+12);hero.vx+=rnd(-260,260);hero.vy+=rnd(-260,260);shake=12;burst(hero.x,hero.y,'#db72ff',16,210);say('¡ESA SETA NO AYUDA!');blip(120,.25,'sawtooth',.07)}
@@ -226,7 +252,7 @@
       }
       for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=Math.pow(.08,dt);p.vy*=Math.pow(.08,dt);if(p.life<=0)particles.splice(i,1)}
       cam.x=clamp(hero.x-W/(2*scale),0,Math.max(0,WORLD.w-W/scale));cam.y=clamp(hero.y-H/(2*scale),0,Math.max(0,WORLD.h-H/scale));
-      updateHUD();if(timeLeft<=0)finish(false);
+      updateHUD();if(stock<=0&&!patatas.length&&!thieves.some(t=>t.carrying)){failReason='bag';finish(false);return}if(timeLeft<=0){failReason='time';finish(false)}
     }
 
     function ellipse(x,y,rx,ry,color,stroke='#15251e',lw=4){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,TAU);ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke()}}
@@ -257,17 +283,22 @@
       ctx.save();ctx.translate(58,28);ctx.rotate(-.08);ctx.fillStyle='#f4c34f';ctx.strokeStyle='#39251c';ctx.lineWidth=6;ctx.beginPath();ctx.roundRect(-28,-48,65,94,12);ctx.fill();ctx.stroke();ctx.fillStyle='#d94b36';ctx.font='900 18px Impact';ctx.textAlign='center';ctx.fillText('PATATAS',4,-7);ctx.font='28px serif';ctx.fillText('🥔',4,25);ctx.restore();
       ellipse(0,8,ana.r,ana.r*.75,'#4fae46','#18351e',7);ellipse(-ana.r*.48,-ana.r*.42,ana.r*.31,ana.r*.31,'#73d65d','#18351e',6);ellipse(ana.r*.48,-ana.r*.42,ana.r*.31,ana.r*.31,'#73d65d','#18351e',6);
       const blink=Math.sin(ana.blink*1.7)>-.92?1:.12;ellipse(-ana.r*.48,-ana.r*.47,9,9*blink,'#18251d',null);ellipse(ana.r*.48,-ana.r*.47,9,9*blink,'#18251d',null);
-      ctx.beginPath();ctx.arc(0,18,ana.r*.34,Math.PI*1.12,Math.PI*1.88);ctx.strokeStyle='#18351e';ctx.lineWidth=6;ctx.stroke();ctx.fillStyle='#fff4ce';ctx.strokeStyle='#18351e';ctx.lineWidth=5;ctx.font='900 22px Impact';ctx.textAlign='center';ctx.strokeText('ANA, LA SAPA MAYOR',0,-ana.r-34);ctx.fillText('ANA, LA SAPA MAYOR',0,-ana.r-34);ctx.restore();
+      ctx.beginPath();ctx.arc(0,18,ana.r*.34,Math.PI*1.12,Math.PI*1.88);ctx.strokeStyle='#18351e';ctx.lineWidth=6;ctx.stroke();ctx.fillStyle='#fff4ce';ctx.strokeStyle='#18351e';ctx.lineWidth=5;ctx.font='900 22px Impact';ctx.textAlign='center';ctx.strokeText('ANA, LA SAPA MAYOR',0,-ana.r-34);ctx.fillText('ANA, LA SAPA MAYOR',0,-ana.r-34);ctx.font='900 17px Impact';ctx.strokeText(`BOLSA: ${stock}`,73,96);ctx.fillText(`BOLSA: ${stock}`,73,96);ctx.restore();
     }
     function drawPlayerFrog(){
       ctx.save();ctx.translate(hero.x,hero.y);if(hero.inv>0&&Math.floor(time*14)%2)ctx.globalAlpha=.3;ctx.scale(1.35,1.35);drawFrog({x:0,y:0,hop:hero.hop});ctx.restore();
       ctx.save();ctx.translate(hero.x,hero.y+39);ctx.fillStyle='#fff4ce';ctx.strokeStyle='#15251e';ctx.lineWidth=4;ctx.font='900 15px Impact';ctx.textAlign='center';ctx.strokeText('TÚ',0,0);ctx.fillText('TÚ',0,0);ctx.restore();
     }
+    function drawThief(t){
+      ctx.save();ctx.translate(t.x,t.y-Math.abs(Math.sin(t.hop))*6);const colors=['#ee7558','#e6c34e','#73bde8'];ellipse(0,4,22,17,colors[t.shade],'#17251d',4);ellipse(-13,-9,9,9,colors[t.shade],'#17251d',4);ellipse(13,-9,9,9,colors[t.shade],'#17251d',4);
+      ctx.fillStyle='#25202a';ctx.fillRect(-23,-14,46,9);ellipse(-13,-10,3,3,'#fff',null);ellipse(13,-10,3,3,'#fff',null);ctx.fillStyle='#17251d';ctx.beginPath();ctx.arc(0,7,5,0,Math.PI);ctx.fill();
+      if(t.carrying){ctx.font='31px serif';ctx.textAlign='center';ctx.fillText('🥔',0,-38)}ctx.restore();
+    }
     function drawWorld2(){
       const hue=(time*18+effect*2)%360;ctx.fillStyle=`hsl(${hue} 30% 18%)`;ctx.fillRect(0,0,WORLD.w,WORLD.h);
       stars.forEach((s,i)=>{ctx.globalAlpha=s.a;ctx.fillStyle=i%2?'#ffb5ef':'#baff8b';ctx.beginPath();ctx.arc(s.x+Math.sin(time+i)*effect*.05,s.y,s.r*(1+effect/140),0,TAU);ctx.fill()});ctx.globalAlpha=1;
       for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(700,450,130+i*105+Math.sin(time*2+i)*15,0,TAU);ctx.strokeStyle=`hsla(${hue+i*35} 90% 65% / .16)`;ctx.lineWidth=18;ctx.stroke()}
-      ctx.fillStyle='#284735';ctx.fillRect(0,WORLD.h-115,WORLD.w,115);mushrooms.forEach(drawMushroom);drawAna();
+      ctx.fillStyle='#284735';ctx.fillRect(0,WORLD.h-115,WORLD.w,115);mushrooms.forEach(drawMushroom);drawAna();thieves.forEach(drawThief);
       patatas.forEach(p=>{ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.font='42px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🥔',0,0);ctx.restore()});
       drawPlayerFrog();particles.forEach(p=>{ctx.globalAlpha=clamp(p.life/.5,0,1);ellipse(p.x,p.y,p.r,p.r,p.color,null)});ctx.globalAlpha=1;
       if(pleaLife>0){ctx.save();ctx.translate(hero.x,hero.y-70);const w=Math.min(390,Math.max(180,pleaText.length*8));ctx.fillStyle='#fff';ctx.strokeStyle='#15251e';ctx.lineWidth=4;ctx.beginPath();ctx.roundRect(-w/2,-29,w,48,12);ctx.fill();ctx.stroke();ctx.fillStyle='#15251e';ctx.font='800 14px system-ui';ctx.textAlign='center';ctx.fillText(pleaText,0,1);ctx.restore()}
